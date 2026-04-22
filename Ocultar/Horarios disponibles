@@ -1,0 +1,68 @@
+
+// BRIX FINAL: Filtro de horarios POS (Forzando fecha seleccionada del cajero - Sin Margen)
+add_action('init', 'brix_openpos_time_filter_init');
+
+function brix_openpos_time_filter_init() {
+    // Si es la petición de OpenPOS pidiendo turnos...
+    if ( isset($_REQUEST['action']) && $_REQUEST['action'] === 'openpos' && isset($_REQUEST['pos_action']) && $_REQUEST['pos_action'] === 'get-time-slots' ) {
+        ob_start('brix_filter_openpos_json_response');
+    }
+}
+
+function brix_filter_openpos_json_response($buffer) {
+    // Limpiamos la basura de WordPress
+    $clean_buffer = trim($buffer);
+    if (substr($clean_buffer, -1) === '0') {
+        $clean_buffer = substr($clean_buffer, 0, -1);
+    }
+    
+    $response = json_decode($clean_buffer, true);
+
+    if (json_last_error() === JSON_ERROR_NONE && isset($response['data']) && is_array($response['data'])) {
+        
+        $filtered_slots = array();
+        $tz = wp_timezone();
+        
+        // 1. HORA DE CORTE (Hora actual exacta de Olavarría, sin margen extra)
+        $now = new DateTime('now', $tz);
+        $cutoff_timestamp = $now->getTimestamp();
+
+        // 2. ¿QUÉ DÍA ELIGIÓ EL CAJERO? Lo sacamos del request del POS
+        $requested_date = $now->format('Y-m-d'); // Por defecto hoy
+        if (isset($_REQUEST['time_stamp_obj'])) {
+            $ts_obj = json_decode(stripslashes($_REQUEST['time_stamp_obj']), true);
+            if (isset($ts_obj['format_date'])) {
+                // Viene como "2026/04/13", lo pasamos a "2026-04-13"
+                $requested_date = str_replace('/', '-', $ts_obj['format_date']); 
+            }
+        }
+
+        foreach ($response['data'] as $slot) {
+            // 3. Agarramos el texto del botón (Ej: "9:00 am - 9:30 am") y sacamos el inicio ("9:00 am")
+            if (isset($slot['label'])) {
+                $start_time_str = trim(explode('-', $slot['label'])[0]); 
+                
+                try {
+                    // Juntamos el día que eligió el cajero con la hora del botón
+                    $slot_datetime = new DateTime($requested_date . ' ' . $start_time_str, $tz);
+                    $slot_timestamp = $slot_datetime->getTimestamp();
+                    
+                    // Si ese horario del botón es MAYOR O IGUAL a la hora exacta actual, lo dejamos pasar
+                    if ($slot_timestamp >= $cutoff_timestamp) {
+                        $filtered_slots[] = $slot; // Se queda
+                    }
+                } catch (Exception $e) {
+                    $filtered_slots[] = $slot; // Si hay error de lectura, por las dudas no lo borramos
+                }
+            } else {
+                $filtered_slots[] = $slot;
+            }
+        }
+
+        // Devolvemos el JSON limpio al POS
+        $response['data'] = $filtered_slots;
+        return wp_json_encode($response);
+    }
+
+    return $buffer;
+}
