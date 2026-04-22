@@ -1,0 +1,65 @@
+add_action('wp_footer', 'bt_milas_ultimate_logic', 20);
+function bt_milas_ultimate_logic() {
+    if ( ! is_product() ) return;
+    global $post;
+    $product = wc_get_product( $post->ID );
+    if ( ! $product ) return;
+
+    $es_papas_fritas = has_term( 'papas-fritas', 'product_cat', $post->ID ) ? 'true' : 'false';
+    $es_milanesa     = has_term( 'milanesas', 'product_cat', $post->ID ) ? 'true' : 'false';
+    ?>
+    <script type="text/javascript">
+    jQuery(document).ready(function($) {
+        const esPapasFritas = <?php echo $es_papas_fritas; ?>;
+        const esMilanesa    = <?php echo $es_milanesa; ?>;
+
+        console.log('esPapasFritas:', esPapasFritas);
+        console.log('esMilanesa:', esMilanesa);
+
+        const palabrasClaveExtras = ["extra", "huevo", "agrandar", "adicional", "papas", "xxl"];
+        const tituloGuarnicion = "Guarnición";
+        const $todosLosAddons = $('.wc-pao-addon');
+
+        const $grupoGuarnicion = $todosLosAddons.filter(function() {
+            return $(this).find('h3, .wc-pao-addon-name').text().trim().includes(tituloGuarnicion);
+        });
+
+        const $gruposExtras = $todosLosAddons.filter(function() {
+            const texto = $(this).find('h3, .wc-pao-addon-name').text().toLowerCase();
+            return palabrasClaveExtras.some(p => texto.includes(p)) && !texto.includes(tituloGuarnicion.toLowerCase());
+        });
+
+        function actualizarExtrasPorEleccion() {
+            const seleccionValue = $grupoGuarnicion.find('input:checked').val() || "";
+            const esPapaSelected = seleccionValue.toLowerCase().indexOf('papa') !== -1;
+            if (esPapaSelected) {
+                $gruposExtras.stop(true, true).slideDown(200);
+            } else {
+                $gruposExtras.stop(true, true).slideUp(200);
+                $gruposExtras.find('input:checked').each(function() {
+                    $(this).prop('checked', false);
+                    $(this).trigger('change');
+                });
+            }
+        }
+
+        if (esPapasFritas) {
+            $gruposExtras.hide();
+            setTimeout(function() {
+                $gruposExtras.stop(true, true).slideDown(200);
+                $gruposExtras.find('input').trigger('change');
+            }, 600);
+
+        } else if (esMilanesa) {
+            if ($grupoGuarnicion.length) {
+                $grupoGuarnicion.on('change', 'input', function() {
+                    actualizarExtrasPorEleccion();
+                });
+            }
+            $gruposExtras.hide();
+            setTimeout(actualizarExtrasPorEleccion, 500);
+        }
+    });
+    </script>
+    <?php
+}
