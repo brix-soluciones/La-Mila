@@ -1,0 +1,60 @@
+add_action('admin_head', 'forzar_ticket_gigante_woocommerce');
+
+function forzar_ticket_gigante_woocommerce() {
+    echo '<style>
+        @media print {
+            /* 1. RESET TOTAL DEL ANCHO */
+            html, body, #wpwrap, #wpcontent, #wpbody-content {
+                width: 58mm !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+            }
+
+            /* 2. ELIMINAR ESCALA: Forzamos que el texto sea grande */
+            .order-details-container, #poststuff, .woocommerce-order-edit__container {
+                width: 58mm !important;
+                min-width: 58mm !important;
+                display: block !important;
+            }
+
+            /* 3. FUENTE POS: Tamaño grande (18px) y Peso máximo (900) */
+            table.woocommerce_order_items, 
+            .wc-order-item-name, 
+            .item_cost, 
+            .line_cost,
+            .wc-order-data-row {
+                font-family: "Courier New", Courier, monospace !important;
+                font-size: 18px !important; /* Subimos a 18px para que se vea IGUAL que el POS */
+                font-weight: 900 !important;
+                color: #000 !important;
+                line-height: 1.2 !important;
+            }
+
+            /* 4. DESCRIPCIONES (Lo que salía finito) */
+            .wc-order-item-meta, .view-order-customer-details, .address, .description {
+                font-size: 16px !important;
+                font-weight: 900 !important;
+                display: block !important;
+                margin-top: 5px !important;
+            }
+
+            /* 5. TABLA: Forzar que las columnas ocupen todo el ancho */
+            table.woocommerce_order_items {
+                table-layout: fixed !important;
+                width: 100% !important;
+            }
+            
+            table.woocommerce_order_items th, 
+            table.woocommerce_order_items td {
+                padding: 4px 0 !important;
+                border-bottom: 1px solid #000 !important;
+            }
+
+            /* 6. OCULTAR TODO LO QUE NO ES EL TICKET */
+            #adminmenuwrap, #adminmenuback, #wpadminbar, .postbox-header, .nav-tab-wrapper, .view-order-action {
+                display: none !important;
+            }
+        }
+    </style>';
+}
