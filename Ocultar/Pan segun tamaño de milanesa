@@ -1,0 +1,113 @@
+/**
+ * Precio dinámico de addon "En Sandwich" según tamaño de variación
+ * Funciona tanto en WooCommerce web como en Open POS (REST API)
+ */
+
+// =============================================================================
+// 1. AL AGREGAR AL CARRITO: normaliza el precio del addon inmediatamente
+// =============================================================================
+add_filter( 'woocommerce_add_cart_item_data', 'brix_normalizar_addon_sandwich', 10, 3 );
+function brix_normalizar_addon_sandwich( $cart_item_data, $product_id, $variation_id ) {
+    if ( empty( $cart_item_data['addons'] ) ) return $cart_item_data;
+
+    foreach ( $cart_item_data['addons'] as &$addon ) {
+        if ( empty( $addon['value'] ) ) continue;
+
+        $value = strtolower( trim( $addon['value'] ) );
+
+        if ( strpos( $value, 'en sandwich' ) !== false || $value === 'en-sandwich' ) {
+            $tamano = '';
+
+            if ( ! empty( $cart_item_data['variation']['attribute_pa_tamano'] ) ) {
+                $tamano = $cart_item_data['variation']['attribute_pa_tamano'];
+            } elseif ( ! empty( $cart_item_data['variation']['attribute_tamano'] ) ) {
+                $tamano = $cart_item_data['variation']['attribute_tamano'];
+            } elseif ( ! empty( $_POST['attribute_pa_tamano'] ) ) {
+                $tamano = sanitize_text_field( $_POST['attribute_pa_tamano'] );
+            }
+
+            $precio                = ( $tamano === '2-personas' ) ? 2000 : 1000;
+            $addon['price']        = $precio;
+            $addon['display_price'] = $precio;
+        }
+    }
+
+    return $cart_item_data;
+}
+
+// =============================================================================
+// 2. AL CALCULAR TOTALES: corrige el precio aunque el carrito ya estuviera armado
+//    (cubre Open POS, sesiones guardadas, cualquier flujo alternativo)
+// =============================================================================
+add_action( 'woocommerce_before_calculate_totals', 'brix_precio_sandwich_por_tamano', 10, 1 );
+function brix_precio_sandwich_por_tamano( $cart ) {
+    if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return;
+    if ( did_action( 'woocommerce_before_calculate_totals' ) >= 2 ) return;
+
+    foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
+        if ( empty( $cart_item['addons'] ) ) continue;
+
+        $addons_modificados = false;
+        $addons = $cart_item['addons'];
+
+        foreach ( $addons as &$addon ) {
+            if ( empty( $addon['value'] ) ) continue;
+
+            $value = strtolower( trim( $addon['value'] ) );
+
+            if ( strpos( $value, 'en sandwich' ) !== false || $value === 'en-sandwich' ) {
+                $tamano = '';
+
+                if ( ! empty( $cart_item['variation']['attribute_pa_tamano'] ) ) {
+                    $tamano = $cart_item['variation']['attribute_pa_tamano'];
+                } elseif ( ! empty( $cart_item['variation']['attribute_tamano'] ) ) {
+                    $tamano = $cart_item['variation']['attribute_tamano'];
+                }
+
+                $precio                 = ( $tamano === '2-personas' ) ? 2000 : 1000;
+                $addon['price']         = $precio;
+                $addon['display_price'] = $precio;
+                $addons_modificados     = true;
+            }
+        }
+
+        if ( $addons_modificados ) {
+            WC()->cart->cart_contents[ $cart_item_key ]['addons'] = $addons;
+        }
+    }
+}
+
+// =============================================================================
+// 3. FRONTEND WEB: actualiza el subtotal en vivo al cambiar variación
+//    (solo aplica en la web, Open POS tiene su propia interfaz)
+// =============================================================================
+add_action( 'wp_footer', 'brix_actualizar_subtotal_js' );
+function brix_actualizar_subtotal_js() {
+    if ( ! is_product() ) return;
+    ?>
+    <script>
+    jQuery(document).ready(function($){
+        var $form = $('form.variations_form');
+        if ($form.length === 0) return;
+
+        $form.on('found_variation', function(event, variation) {
+            try {
+                var $sandwichInput = $('input.wc-pao-addon-radio[value="en-sandwich"]');
+                if ($sandwichInput.length === 0) return;
+
+                if (variation && variation.attributes && variation.attributes.attribute_pa_tamano) {
+                    var tamano     = variation.attributes.attribute_pa_tamano;
+                    var nuevoPrecio = (tamano === '2-personas') ? 2000 : 1000;
+
+                    $sandwichInput.attr('data-price', nuevoPrecio);
+                    $sandwichInput.data('price', nuevoPrecio);
+                    $('body').trigger('woocommerce-product-addons-update');
+                }
+            } catch (error) {
+                console.log('Ignorando error de variación: ', error);
+            }
+        });
+    });
+    </script>
+    <?php
+}
